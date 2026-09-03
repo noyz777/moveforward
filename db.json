@@ -1,0 +1,36 @@
+{
+  "posts": [],
+  "syncData": [
+    {
+      "title": "Test 1",
+      "description": "The first test",
+      "createdAt": "2026-09-02T22:30:37.535Z",
+      "id": "nxuUTe1chZM"
+    },
+    {
+      "title": "Test 2",
+      "description": "The 2nd test",
+      "createdAt": "2026-09-02T22:31:02.024Z",
+      "id": "nbMrhDxdIcE"
+    },
+    {
+      "title": "Test 3",
+      "description": "The 3rd test",
+      "createdAt": "2026-09-02T22:31:15.123Z",
+      "id": "luBeIKX8sXY"
+    },
+    {
+      "title": "Test 4",
+      "description": "The 4th test",
+      "createdAt": "2026-09-02T22:32:27.541Z",
+      "id": "WCKmHaPhvCI"
+    },
+    {
+      "title": "Test 5",
+      "description": "The 5th test",
+      "createdAt": "2026-09-02T22:32:52.401Z",
+      "id": "VH7-4v1FT30"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
