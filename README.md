@@ -1,32 +1,27 @@
-# React + TypeScript + Vite
+# Move Forward
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+An offline-first **Store & Forward** React application built with Vite, TypeScript, Dexie.js (IndexedDB), and Oxlint.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 📶 **Offline-First Architecture**: Stores actions locally in IndexedDB when network connectivity is unavailable.
+- 🔄 **Auto-Sync Engine**: Flushes pending queue actions to the server as soon as connection is restored.
+- ⚡ **Vite + React 19 + TypeScript**: Fast HMR and build performance.
+- 🚀 **Oxlint**: High-performance linter powered by Rust.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the Oxlint configuration
+- **Frontend**: React 19, TypeScript, Vite
+- **Local Database**: [Dexie.js](https://dexie.org/) (IndexedDB wrapper)
+- **Linter**: Oxlint
+- **Mock Backend**: `json-server` (for local development testing)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+---
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+## Getting Started
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 1. Install Dependencies
+```bash
+npm install
