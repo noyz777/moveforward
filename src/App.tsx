@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { db, type PendingAction } from './db/schema';
 import { flushQueue, queueOrSendAction } from './services/syncEngine';
 
@@ -12,15 +12,14 @@ export function App() {
 
     const effectiveOnline = isOnline && !simulatedOffline;
 
-    // Fetch pending queue from IndexedDB
-    const refreshQueue = async () => {
+    // 1. Memoized fetchers
+    const refreshQueue = useCallback(async () => {
         const queue = await db.pendingActions.toArray();
         setPendingItems(queue);
-    };
+    }, []);
 
-    // Fetch successfully synced items from json-server
-    const refreshSyncedData = async () => {
-        if (!effectiveOnline) return;
+    const refreshSyncedData = useCallback(async (onlineStatus: boolean) => {
+        if (!onlineStatus) return;
         try {
             const res = await fetch('http://localhost:3000/syncData');
             if (res.ok) {
@@ -28,36 +27,36 @@ export function App() {
                 setSyncedItems(data);
             }
         } catch {
-            // Ignore errors if server isn't reachable
+            // Server offline or unreachable
         }
-    };
+    }, []);
 
+    // 2. Single Effect for external synchronization & event listeners
     useEffect(() => {
-        refreshQueue();
-        refreshSyncedData();
-
         const handleOnline = () => setIsOnline(true);
         const handleOffline = () => setIsOnline(false);
 
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
+        // Perform async sync/fetch without synchronous top-level execution
+        const synchronize = async () => {
+            if (effectiveOnline) {
+                await flushQueue();
+            }
+            await refreshQueue();
+            await refreshSyncedData(effectiveOnline);
+        };
+
+        void synchronize();
+
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, []);
+    }, [effectiveOnline, refreshQueue, refreshSyncedData]);
 
-    // Trigger sync and refresh data when coming back online
-    useEffect(() => {
-        if (effectiveOnline) {
-            flushQueue().then(() => {
-                refreshQueue();
-                refreshSyncedData();
-            });
-        }
-    }, [effectiveOnline]);
-
+    // 3. User submission handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!title.trim()) return;
@@ -65,7 +64,6 @@ export function App() {
         const payload = { title, description, createdAt: new Date().toISOString() };
 
         if (!effectiveOnline) {
-            // Direct store offline if simulated offline
             await db.pendingActions.add({
                 url: 'http://localhost:3000/syncData',
                 method: 'POST',
@@ -73,14 +71,13 @@ export function App() {
                 createdAt: Date.now(),
             });
         } else {
-            // Send directly or store on failure
             await queueOrSendAction('http://localhost:3000/syncData', 'POST', payload);
         }
 
         setTitle('');
         setDescription('');
         await refreshQueue();
-        await refreshSyncedData();
+        await refreshSyncedData(effectiveOnline);
     };
 
     return (
@@ -93,7 +90,7 @@ export function App() {
                     Status: {effectiveOnline ? '🟢 Online' : '🔴 Offline (Storing Locally)'}
                 </h3>
                 <button
-                    onClick={() => setSimulatedOffline(!simulatedOffline)}
+                    onClick={() => setSimulatedOffline((prev) => !prev)}
                     style={{ padding: '8px 16px', cursor: 'pointer' }}
                 >
                     {simulatedOffline ? 'Simulate Reconnect' : 'Simulate Disconnect'}
