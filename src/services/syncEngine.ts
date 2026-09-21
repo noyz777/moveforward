@@ -1,13 +1,16 @@
-import { db, type PendingAction } from '../db/schema';
+import { db } from '../db/schema';
 
-// Action to record data locally
+// Module-level lock to prevent concurrent flush calls
+let isSyncing = false;
+
+// Action to record data locally or send immediately
 export async function queueOrSendAction(
     url: string,
     method: 'POST' | 'PUT' | 'DELETE',
     payload: Record<string, unknown>
 ) {
+    // Always queue first if offline or simulated offline
     if (!navigator.onLine) {
-        // Store offline
         await db.pendingActions.add({
             url,
             method,
@@ -17,45 +20,65 @@ export async function queueOrSendAction(
         return { status: 'queued' };
     }
 
-    // Send immediately if online
+    // Attempt direct request if online
     try {
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-        return await response.json();
-    } catch (err) {
-        // Fallback to queue if request fails due to unexpected network loss
-        await db.pendingActions.add({
-            url,
-            method,
-            payload,
-            createdAt: Date.now(),
-        });
-        return { status: 'queued' };
+
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch {
+        // Fall through to queueing on network connection drops
     }
+
+    // Fallback to local queue if server returns non-2xx status or fetch fails
+    await db.pendingActions.add({
+        url,
+        method,
+        payload,
+        createdAt: Date.now(),
+    });
+    return { status: 'queued' };
 }
 
 // Flush local queue when back online
 export async function flushQueue() {
-    const queue = await db.pendingActions.orderBy('createdAt').toArray();
+    // Prevent duplicate execution if flush is already running
+    if (isSyncing) return;
+    isSyncing = true;
 
-    for (const item of queue) {
-        try {
-            const res = await fetch(item.url, {
-                method: item.method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(item.payload),
-            });
+    try {
+        const queue = await db.pendingActions.orderBy('createdAt').toArray();
 
-            if (res.ok && item.id) {
-                // Remove item from local DB upon successful server delivery
-                await db.pendingActions.delete(item.id);
+        for (const item of queue) {
+            // Guard clause for safety
+            if (item.id === undefined) continue;
+
+            try {
+                const res = await fetch(item.url, {
+                    method: item.method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item.payload),
+                });
+
+                if (res.ok) {
+                    // Remove from local IndexedDB immediately upon successful response
+                    await db.pendingActions.delete(item.id);
+                } else {
+                    // Stop processing queue if server returns 4xx/5xx error
+                    break;
+                }
+            } catch {
+                // Stop processing if network connection drops mid-flush
+                break;
             }
-        } catch {
-            // Stop flushing if still failing; wait for next reconnect event
-            break;
         }
+    } finally {
+        // Always release lock when finished
+        isSyncing = false;
     }
 }
