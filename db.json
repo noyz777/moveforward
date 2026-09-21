@@ -1,6 +1,1 @@
-{
-  "posts": [],
-  "syncData": [
-  ],
-  "$schema": "./node_modules/json-server/schema.json"
-}
+{"posts": [], "syncData": []}
