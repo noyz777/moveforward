@@ -151,6 +151,7 @@ export async function flushQueue(): Promise<void> {
         if (res.ok) {
           await db.pendingActions.delete(action.id);
           retryCount = 0;
+          notify(); // let the UI show each item as soon as the server has it
           continue;
         }
       } catch {

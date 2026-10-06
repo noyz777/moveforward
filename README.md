@@ -3,6 +3,13 @@
 An offline-first **Store & Forward** demo built with React 19, TypeScript, Vite and Dexie.js (IndexedDB).
 Writes are saved locally first and forwarded to the server whenever it is reachable, in order, without duplicates.
 
+[![CI](https://github.com/noyz777/moveforward/actions/workflows/ci.yml/badge.svg)](https://github.com/noyz777/moveforward/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+## Why this matters
+
+Apps used on remote sites, in vehicles or in basements lose their connection all the time. When a submission fails, users either lose their work or retry and create duplicates. This demo shows a small, testable pattern for avoiding both: save every write locally first, forward it in order once the server is reachable, and never lose or duplicate a write.
+
 ## How it works
 
 ```text
@@ -27,15 +34,22 @@ Writes are saved locally first and forwarded to the server whenever it is reacha
 | **Concurrent flushes** | A module-level lock, plus a "flush requested" flag so a request made mid-flush is not lost. |
 | **Reliability of `navigator.onLine`** | It only reports that a network interface is up, so a failed `fetch` is also treated as "offline" and retried. |
 
+### Design decisions and trade-offs
+
+- **One code path, online or offline.** Every write is queued before any network call, so there is no "fast path" that could overtake an older queued item. The cost is one small IndexedDB write on every request, even when online.
+- **Strict FIFO with head-of-line blocking.** Order is preserved by only ever sending the oldest item. A transient failure therefore delays everything behind it, which is deliberate: skipping ahead could apply writes out of order. Permanent 4xx errors are the exception and are moved aside so they cannot block the queue.
+- **Persist the attempt before sending.** If the tab dies mid-request the outcome is unknown, so the next attempt first asks the server whether it already has the item. The cost is an extra write per attempt.
+
 ## Getting started
 
-Requires Node.js 18+.
+Requires Node.js 22.12 or later.
 
 ```bash
 npm install
-npx json-server db.json --port 3000   # mock backend (terminal 1)
-npm run dev                           # Vite dev server (terminal 2)
+npm run dev:all   # mock backend (json-server on :3000) + Vite dev server
 ```
+
+To run them separately, use `npm run mock` and `npm run dev` in two terminals.
 
 Set `VITE_API_URL` in a `.env` file to point at a different backend (default `http://localhost:3000`).
 
@@ -45,10 +59,14 @@ Try it: click **Simulate Disconnect**, add a few items (they appear in the Pendi
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Start Vite |
+| `npm run dev:all` | Start the mock backend and Vite together |
+| `npm run mock` | Start the json-server mock backend on port 3000 |
+| `npm run dev` | Start Vite only |
 | `npm run build` | Type-check and build |
 | `npm test` | Run the sync-engine tests (Vitest + fake-indexeddb) |
 | `npm run lint` | Oxlint |
+
+CI runs lint, tests and the production build on every push and pull request.
 
 ## Project structure
 
@@ -58,7 +76,9 @@ src/
 ├── db/schema.ts                 # Dexie schema (pendingActions, failedActions) + v1→v2 migration
 ├── services/
 │   ├── syncEngine.ts            # enqueue / flush / retry / reconcile
-│   └── syncEngine.test.ts       # ordering, lost-response, 4xx, backoff tests
+│   ├── syncEngine.test.ts       # ordering, lost-response, 4xx, backoff tests
+│   ├── latestOnly.ts            # drops stale out-of-order responses (used for the server list)
+│   └── latestOnly.test.ts
 ├── hooks/useSync.ts             # React glue: connectivity, live queue views, server data
 ├── App.tsx                      # Demo UI
 └── main.tsx
