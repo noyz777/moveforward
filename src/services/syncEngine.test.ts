@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../db/schema';
-import { enqueueAction, flushQueue, retryPolicy, setSimulatedOffline } from './syncEngine';
+import { enqueueAction, flushQueue, retryPolicy, setSimulatedOffline, subscribeToSync } from './syncEngine';
 
 const URL = 'http://api.test/syncData';
 
@@ -131,5 +131,25 @@ describe('store & forward engine', () => {
     await idle();
 
     expect(calls.map((c) => c.body.title)).toEqual(['old', 'new']);
+  });
+
+  it('notifies subscribers after each delivered item, not only when the flush ends', async () => {
+    const events: string[] = [];
+    mockServer(({ body }) => {
+      events.push(`post:${body.title}`);
+      return json({}, 201);
+    });
+    const unsubscribe = subscribeToSync(() => events.push('notify'));
+
+    setSimulatedOffline(true);
+    await enqueueAction(URL, 'POST', { title: 'first' });
+    await enqueueAction(URL, 'POST', { title: 'second' });
+    events.length = 0;
+    setSimulatedOffline(false);
+    await flushQueue();
+    unsubscribe();
+
+    // One notification straight after each delivery, plus one when the flush finishes.
+    expect(events).toEqual(['post:first', 'notify', 'post:second', 'notify', 'notify']);
   });
 });

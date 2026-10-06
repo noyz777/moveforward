@@ -76,7 +76,9 @@ src/
 ├── db/schema.ts                 # Dexie schema (pendingActions, failedActions) + v1→v2 migration
 ├── services/
 │   ├── syncEngine.ts            # enqueue / flush / retry / reconcile
-│   └── syncEngine.test.ts       # ordering, lost-response, 4xx, backoff tests
+│   ├── syncEngine.test.ts       # ordering, lost-response, 4xx, backoff tests
+│   ├── latestOnly.ts            # drops stale out-of-order responses (used for the server list)
+│   └── latestOnly.test.ts
 ├── hooks/useSync.ts             # React glue: connectivity, live queue views, server data
 ├── App.tsx                      # Demo UI
 └── main.tsx
