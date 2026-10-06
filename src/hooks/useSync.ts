@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { liveQuery } from 'dexie';
 import { db, type FailedAction, type PendingAction } from '../db/schema';
 import { ITEMS_URL } from '../config';
 import { flushQueue, isOnline, setSimulatedOffline, subscribeToSync } from '../services/syncEngine';
+import { latestOnly } from '../services/latestOnly';
 
 export interface ServerItem {
   id: string;
@@ -21,6 +22,12 @@ function useLive<T>(query: () => Promise<T[]>): T[] {
   return rows;
 }
 
+async function fetchServerItems(): Promise<ServerItem[]> {
+  const res = await fetch(ITEMS_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as ServerItem[];
+}
+
 const readPending = () => db.pendingActions.orderBy('id').toArray();
 const readFailed = () => db.failedActions.orderBy('id').toArray();
 
@@ -34,14 +41,18 @@ export function useSync() {
 
   const online = browserOnline && !simulatedOffline;
 
-  const refreshServerItems = useCallback(async () => {
-    if (!isOnline()) return;
-    try {
-      const res = await fetch(ITEMS_URL);
-      if (res.ok) setServerItems((await res.json()) as ServerItem[]);
-    } catch {
-      // Server unreachable - keep showing the last known data.
-    }
+  // Several refreshes can be in flight at once (one per delivered item, plus one when a flush ends).
+  // latestOnly makes sure a slow, older response can never overwrite a newer one.
+  const refreshServerItems = useMemo(() => {
+    const refresh = latestOnly(fetchServerItems, setServerItems);
+    return async () => {
+      if (!isOnline()) return;
+      try {
+        await refresh();
+      } catch {
+        // Server unreachable - keep showing the last known data.
+      }
+    };
   }, []);
 
   // Browser connectivity events.
